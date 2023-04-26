@@ -46,6 +46,9 @@ class Model(object):
     def predict(self, img):
         with torch.no_grad():
             img = Image.open(img).convert('RGB')
+            # check image shape
+            if img.size[0] > 300 and img.size[1] > 300:
+                raise ValueError("Image size must be smaller than 300x300")
             img = self.preprocess(img)
             img = img.unsqueeze(0)
             img = img.to(DEVICE)
@@ -102,7 +105,11 @@ if __name__ == '__main__':
             if uploaded_file is not None:
                 st.write("")
                 st.write("Processing...")
-                out = model.predict(uploaded_file)
+                try:
+                    out = model.predict(uploaded_file)
+                except ValueError as e:
+                    st.write(e)
+                    st.stop()
                 out = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
                 static_component = image_comparison(
                     img1=Image.open(uploaded_file),
