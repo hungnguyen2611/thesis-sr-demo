@@ -34,7 +34,7 @@ class Model(object):
 
     @staticmethod
     def load_model(weight_path=WEIGHT_PATH):
-        weight = torch.load(weight_path)
+        weight = torch.load(weight_path, map_location=DEVICE)
         model_sr = SuperResolution().to(DEVICE).eval()
         model_sr.model_Enc.load_state_dict(weight['model_Enc'])
         model_sr.model_Dec_SR.load_state_dict(weight['model_Dec_SR'])
