@@ -1,0 +1,114 @@
+import cv2
+import numpy as np
+import streamlit as st
+import torch
+from PIL import Image
+from streamlit_image_comparison import image_comparison
+from torchvision.transforms import Compose, ToTensor
+
+from model import decoder, encoder
+
+WEIGHT_PATH = './weights/epoch_4520_weight.pth'
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+class Model(object):
+    def __init__(self) -> None:
+        self.model_Enc = encoder.Encoder_RRDB(num_feat=64).to(device=DEVICE)
+        self.model_Dec_SR = decoder.Decoder_SR_RRDB(num_in_ch=64).to(device=DEVICE)
+        self.preprocess = Compose([ToTensor()])
+        self.load_model()
+
+    def load_model(self, weight_path=WEIGHT_PATH):
+        weight = torch.load(weight_path)
+        print("[LOADING] Loading encoder...")
+        self.model_Enc.load_state_dict(weight['model_Enc'])
+        print("[LOADING] Loading decoder...")
+        self.model_Dec_SR.load_state_dict(weight['model_Dec_SR'])
+        print("[LOADING] Loading done!")
+        self.model_Enc.eval().to(device=DEVICE)
+        self.model_Dec_SR.eval().to(device=DEVICE)
+
+    @staticmethod
+    def post_process(out):
+        min_max = (0, 1)
+        out = out.detach()[0].float().cpu()
+
+        out = out.squeeze().float().cpu().clamp_(*min_max)
+        out = (out - min_max[0]) / (min_max[1] - min_max[0])
+        out = out.numpy()
+        out = np.transpose(out[[2, 1, 0], :, :], (1, 2, 0))
+
+        out = (out * 255.0).round()
+        out = out.astype(np.uint8)
+        return out
+
+    def predict(self, img):
+        with torch.no_grad():
+            img = Image.open(img).convert('RGB')
+            img = self.preprocess(img)
+            img = img.unsqueeze(0)
+            img = img.to(DEVICE)
+
+            feat = self.model_Enc(img)
+            out = self.model_Dec_SR(feat)
+            out = self.post_process(out)
+            return out
+
+
+if __name__ == '__main__':
+    # init model
+    model = Model()
+    # create a streamlit app for demo
+    st.set_page_config(
+        page_title="🔥🔥🔥Super resolution demo 🔥🔥🔥",
+        page_icon="🔥",
+        layout="centered",
+        initial_sidebar_state="auto",
+    )
+    st.markdown(
+        """
+        <h2 style='text-align: center'>
+        🔥🔥🔥 Super Resolution Demo 🔥🔥🔥
+        </h2>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+        <p style='text-align: center'>
+        <a href='https://github.com/hungnguyen2611/super-resolution' target='_blank'>Github</a>
+        <br />
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.write("##")
+
+    with st.form(key="DEMO"):
+        st.markdown(
+            """
+            <p style='text-align: center'>
+            <b>Upload your image</b>
+            </p>
+            """,
+            unsafe_allow_html=True,
+        )
+        uploaded_file = st.file_uploader("Upload", type=["png", "jpg", "jpeg"])
+        submit_button = st.form_submit_button(label="Submit")
+        out = None
+        if submit_button:
+            if uploaded_file is not None:
+                st.write("")
+                st.write("Processing...")
+                out = model.predict(uploaded_file)
+                out = cv2.cvtColor(out, cv2.COLOR_BGR2RGB)
+                static_component = image_comparison(
+                    img1=Image.open(uploaded_file),
+                    img2=Image.fromarray(out),
+                    label1="Low resolution",
+                    label2="Super resolution"
+                )
+            else:
+                st.write("Please upload an image file")
