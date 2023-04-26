@@ -20,7 +20,7 @@ class Model(object):
         self.load_model()
 
     def load_model(self, weight_path=WEIGHT_PATH):
-        weight = torch.load(weight_path)
+        weight = torch.load(weight_path, map_location=DEVICE)
         print("[LOADING] Loading encoder...")
         self.model_Enc.load_state_dict(weight['model_Enc'])
         print("[LOADING] Loading decoder...")
