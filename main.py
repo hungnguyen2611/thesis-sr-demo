@@ -1,7 +1,10 @@
+import gc
+
 import cv2
 import numpy as np
 import streamlit as st
 import torch
+import torch.nn as nn
 from PIL import Image
 from streamlit_image_comparison import image_comparison
 from torchvision.transforms import Compose, ToTensor
@@ -12,22 +15,33 @@ WEIGHT_PATH = './weights/epoch_4520_weight.pth'
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
+class SuperResolution(nn.Module):
+    def __init__(self) -> None:
+        super(SuperResolution, self).__init__()
+        self.model_Enc = encoder.Encoder_RRDB(num_feat=64)
+        self.model_Dec_SR = decoder.Decoder_SR_RRDB(num_in_ch=64)
+
+    def forward(self, img):
+        feat = self.model_Enc(img)
+        output = self.model_Dec_SR(feat)
+        return output
+
+
 class Model(object):
     def __init__(self) -> None:
-        self.model_Enc = encoder.Encoder_RRDB(num_feat=64).to(device=DEVICE)
-        self.model_Dec_SR = decoder.Decoder_SR_RRDB(num_in_ch=64).to(device=DEVICE)
-        self.preprocess = Compose([ToTensor()])
-        self.load_model()
+        self.model_sr = self.load_model(WEIGHT_PATH)
+        self.preprocessor = Compose([ToTensor()])
 
-    def load_model(self, weight_path=WEIGHT_PATH):
-        weight = torch.load(weight_path, map_location=DEVICE)
-        print("[LOADING] Loading encoder...")
-        self.model_Enc.load_state_dict(weight['model_Enc'])
-        print("[LOADING] Loading decoder...")
-        self.model_Dec_SR.load_state_dict(weight['model_Dec_SR'])
+    @staticmethod
+    def load_model(weight_path=WEIGHT_PATH):
+        weight = torch.load(weight_path)
+        model_sr = SuperResolution().to(DEVICE).eval()
+        model_sr.model_Enc.load_state_dict(weight['model_Enc'])
+        model_sr.model_Dec_SR.load_state_dict(weight['model_Dec_SR'])
         print("[LOADING] Loading done!")
-        self.model_Enc.eval().to(device=DEVICE)
-        self.model_Dec_SR.eval().to(device=DEVICE)
+        del weight
+        gc.collect()
+        return model_sr
 
     @staticmethod
     def post_process(out):
@@ -47,21 +61,23 @@ class Model(object):
         with torch.no_grad():
             img = Image.open(img).convert('RGB')
             # check image shape
-            if img.size[0] > 300 and img.size[1] > 300:
+            if img.size[0] > 500 and img.size[1] > 500:
                 raise ValueError("Image size must be smaller than 300x300")
-            img = self.preprocess(img)
+            img = self.preprocessor(img)
             img = img.unsqueeze(0)
             img = img.to(DEVICE)
 
-            feat = self.model_Enc(img)
-            out = self.model_Dec_SR(feat)
-            out = self.post_process(out)
-            return out
+            feat = self.model_sr(img)
+            output_img = self.post_process(feat)
+            return output_img
+
+
+@st.cache_data
+def load_model():
+    return Model()
 
 
 if __name__ == '__main__':
-    # init model
-    model = Model()
     # create a streamlit app for demo
     st.set_page_config(
         page_title="🔥🔥🔥Super resolution demo 🔥🔥🔥",
@@ -88,7 +104,7 @@ if __name__ == '__main__':
     )
 
     st.write("##")
-
+    model = load_model()
     with st.form(key="DEMO"):
         st.markdown(
             """
