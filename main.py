@@ -61,8 +61,8 @@ class Model(object):
         with torch.no_grad():
             img = Image.open(img).convert('RGB')
             # check image shape
-            if img.size[0] > 500 and img.size[1] > 500:
-                raise ValueError("Image size must be smaller than 300x300")
+            if img.size[0] > 2000 and img.size[1] > 2000:
+                raise ValueError("Image size must be smaller than 2000x2000")
             img = self.preprocessor(img)
             img = img.unsqueeze(0)
             img = img.to(DEVICE)
