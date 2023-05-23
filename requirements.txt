@@ -2,3 +2,6 @@ torch
 torchvision
 opencv-python-headless
 streamlit-image-comparison
+pyngrok
+protobuf
+validators
